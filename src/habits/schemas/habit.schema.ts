@@ -41,9 +41,9 @@ export class Habit {
 
   @Prop({
     type: [Number],
-    default: [],
+    default: [] as number[],
   })
-  customDays!: [];
+  customDays!: number[];
 
   @Prop({
     default: true,
