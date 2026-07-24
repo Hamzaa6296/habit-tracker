@@ -5,6 +5,7 @@ import { UsersModule } from './users/users.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './auth/auth.module';
 import { HabitModule } from './habits/habits.module';
+import { CheckinModule } from './checkins/checkin.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { HabitModule } from './habits/habits.module';
     UsersModule,
     AuthModule,
     HabitModule,
+    CheckinModule,
   ],
 })
 export class AppModule {}
