@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 import {
@@ -6,40 +7,34 @@ import {
   Post,
   Delete,
   Param,
-  Body,
   UseGuards,
 } from '@nestjs/common';
 
 import { CheckinService } from './checkin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { CreateCheckinDto } from './dto/create-checkin.dto';
 
 @UseGuards(JwtAuthGuard)
-@Controller('checkins')
+@Controller('habits/:habitId/checkins')
 export class CheckinController {
   constructor(private readonly checkinService: CheckinService) {}
 
-  @Post(':habitId')
-  create(
-    @CurrentUser() user: any,
-    @Param('habitId') habitId: string,
-    @Body() dto: CreateCheckinDto,
-  ) {
-    return this.checkinService.create(user.userId, habitId, dto.date);
+  @Post()
+  create(@CurrentUser() user: any, @Param('habitId') habitId: string) {
+    return this.checkinService.create(user._id.toString(), habitId);
   }
 
-  @Get(':habitId')
+  @Get()
   findAll(@CurrentUser() user: any, @Param('habitId') habitId: string) {
-    return this.checkinService.findAll(user.userId, habitId);
+    return this.checkinService.findAll(user._id.toString(), habitId);
   }
 
-  @Delete(':habitId')
+  @Delete(':checkInId')
   remove(
     @CurrentUser() user: any,
     @Param('habitId') habitId: string,
-    @Param('checkinId') checkinId: string,
+    @Param('checkInId') checkInId: string,
   ) {
-    return this.checkinService.remove(user.userId, habitId, checkinId);
+    return this.checkinService.remove(user._id.toString(), habitId, checkInId);
   }
 }

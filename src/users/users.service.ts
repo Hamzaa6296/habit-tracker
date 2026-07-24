@@ -49,9 +49,13 @@ export class UsersService {
     };
   }
 
-  async findByEmail(email: string) {
-    return this.userModel.findOne({
-      email,
-    });
+  async findByEmail(email: string, includePassword = false) {
+    const query = this.userModel.findOne({ email });
+
+    if (includePassword) {
+      query.select('+password');
+    }
+
+    return query.exec();
   }
 }

@@ -20,20 +20,19 @@ export class CheckinService {
     @InjectModel(Habit.name)
     private readonly habitModel: Model<HabitDocument>,
   ) {}
-  async create(userId: string, habitId: string, date: string) {
+  async create(userId: string, habitId: string) {
     const habit = await this.habitModel.findOne({
       _id: habitId,
       user: userId,
     });
     if (!habit) throw new NotFoundException('Habit not found');
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
-
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     try {
       return await this.checkinModel.create({
         habit: new Types.ObjectId(habitId),
         user: new Types.ObjectId(userId),
-        date: normalizedDate,
+        date: today,
       });
     } catch {
       throw new BadRequestException('habit already checkedin for this day');

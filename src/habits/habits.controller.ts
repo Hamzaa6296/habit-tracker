@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
@@ -24,18 +25,18 @@ export class HabitsController {
   @Post()
   create(@CurrentUser() user, @Body() dto: createHabitDto) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
-    return this.habitsService.create(user.userId, dto);
+    return this.habitsService.create(user._id.toString(), dto);
   }
 
   @Get()
   findAll(@CurrentUser() user) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    return this.habitsService.findAll(user.userId);
+    return this.habitsService.findAll(user._id.toString());
   }
 
   @Get(':id')
-  findOne(@CurrentUser() user, @Param(':id') id: string) {
-    return this.habitsService.findOne(user.userId, id);
+  findOne(@CurrentUser() user, @Param('id') id: string) {
+    return this.habitsService.findOne(user._id.toString(), id);
   }
 
   @Patch(':id')
@@ -44,11 +45,11 @@ export class HabitsController {
     @Param('id') id: string,
     @Body() dto: UpdateHabitDto,
   ) {
-    return this.habitsService.update(user.userId, id, dto);
+    return this.habitsService.update(user._id.toString(), id, dto);
   }
 
-  @Delete()
+  @Delete(':id')
   remove(@CurrentUser() user, @Param('id') id: string) {
-    return this.habitsService.remove(user.userId, id);
+    return this.habitsService.remove(user._id.toString(), id);
   }
 }
