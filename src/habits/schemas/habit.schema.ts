@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { User } from '../../users/schemas/user-schema';
@@ -34,6 +35,7 @@ export class Habit {
   discription!: string;
 
   @Prop({
+    type: String,
     enum: HabitFrequency,
     default: HabitFrequency.DAILY,
   })
@@ -43,12 +45,42 @@ export class Habit {
     type: [Number],
     default: [] as number[],
   })
-  customDays!: number[];
+  weekDays!: number[];
+  @Prop({
+    type: [Number],
+    default: [] as number[],
+  })
+  monthDays!: number[];
 
   @Prop({
     default: true,
   })
   isActive!: boolean;
+
+  // chached stats
+
+  @Prop({
+    default: 0,
+  })
+  currentStreak!: number;
+
+  @Prop({
+    default: 0,
+  })
+  longestStreak!: number;
+
+  @Prop({
+    default: 0,
+  })
+  totalCheckIns!: number;
+  @Prop({
+    default: 0,
+  })
+  completionRate!: number;
+  @Prop({
+    default: 0,
+  })
+  lastCompletedAt!: number;
 }
 
 export const HabitSchema = SchemaFactory.createForClass(Habit);

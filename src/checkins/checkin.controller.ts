@@ -10,14 +10,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { CheckinService } from './checkin.service';
+import { CheckinsService } from './checkin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('habits/:habitId/checkins')
 export class CheckinController {
-  constructor(private readonly checkinService: CheckinService) {}
+  constructor(private readonly checkinService: CheckinsService) {}
 
   @Post()
   create(@CurrentUser() user: any, @Param('habitId') habitId: string) {

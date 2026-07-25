@@ -16,7 +16,6 @@ export class HabitsService {
     return this.habitModel.create({
       ...dto,
       user: new Types.ObjectId(userId),
-      customDays: dto.customDays ?? [],
     });
   }
 
@@ -65,6 +64,46 @@ export class HabitsService {
     }
     return {
       message: 'habit deleted successfully',
+    };
+  }
+
+  async updateStatistics(
+    habitId: string,
+    stats: {
+      currentStreak: number;
+      longestStreak: number;
+      totalCheckIns: number;
+      completionRate: number;
+      lastCompletedAt: Date | null;
+    },
+  ) {
+    return this.habitModel.findByIdAndUpdate(habitId, stats, {
+      new: true,
+    });
+  }
+
+  async findOwnedHabit(userId: string, habitId: string) {
+    return this.habitModel.findOne({
+      _id: habitId,
+      user: userId,
+    });
+  }
+
+  async getStatistics(userId: string, habitId: string) {
+    const habit = await this.habitModel.findOne({
+      _id: habitId,
+      user: userId,
+    });
+
+    if (!habit) {
+      throw new NotFoundException('habit not found');
+    }
+    return {
+      currentStreak: habit.currentStreak,
+      longestStreak: habit.longestStreak,
+      totalCheckIns: habit.totalCheckIns,
+      completionRate: habit.completionRate,
+      lastCompletedAt: habit.lastCompletedAt,
     };
   }
 }

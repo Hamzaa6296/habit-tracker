@@ -52,4 +52,9 @@ export class HabitsController {
   remove(@CurrentUser() user, @Param('id') id: string) {
     return this.habitsService.remove(user._id.toString(), id);
   }
+
+  @Get(':id/stats')
+  getStatistics(@CurrentUser() user: any, @Param('id') id: string) {
+    return this.habitsService.getStatistics(user._id.toString(), id);
+  }
 }

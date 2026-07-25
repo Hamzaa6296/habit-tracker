@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 
 import { CheckinController } from './checkin.controller';
-import { CheckinService } from './checkin.service';
+import { CheckinsService } from './checkin.service';
 
 import { Checkin, CheckinSchema } from './schemas/checkin.schema';
 
@@ -22,6 +22,6 @@ import { Habit, HabitSchema } from '../habits/schemas/habit.schema';
     ]),
   ],
   controllers: [CheckinController],
-  providers: [CheckinService],
+  providers: [CheckinsService],
 })
 export class CheckinModule {}
