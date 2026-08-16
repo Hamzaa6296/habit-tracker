@@ -30,8 +30,14 @@ export class HabitsController {
 
   @Get()
   findAll(@CurrentUser() user) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-    return this.habitsService.findAll(user._id.toString());
+    console.log('🔥🔥🔥 CONTROLLER REACHED');
+    console.log('USER:', user);
+
+    return {
+      message: 'Controller is working',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      userId: user._id.toString(),
+    };
   }
 
   @Get(':id')
