@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { analyticsController } from './analytics.controller';
+import { AnalyticsController } from './analytics.controller';
 import { AnalyticsService } from './analytics.service';
 
 import { Habit, HabitSchema } from '../habits/schemas/habit.schema';
@@ -19,7 +19,7 @@ import { Checkin, CheckinSchema } from '../checkins/schemas/checkin.schema';
       },
     ]),
   ],
-  controllers: [analyticsController],
+  controllers: [AnalyticsController],
   providers: [AnalyticsService],
 })
 export class AnalyticsModule {}

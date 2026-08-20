@@ -8,7 +8,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('analytics')
-export class analyticsController {
+export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('weekly')

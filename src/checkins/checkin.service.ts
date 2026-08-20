@@ -27,28 +27,18 @@ export class CheckinsService {
   // =========================================================
 
   async create(userId: string, habitId: string) {
-    console.log('========== CREATE CHECK-IN DEBUG ==========');
-    console.log('USER ID:', userId);
-    console.log('HABIT ID:', habitId);
-
     const habit = await this.habitModel.findById(habitId);
-
-    console.log('HABIT:', habit);
 
     if (!habit) {
       throw new NotFoundException('Habit not found');
     }
-
-    console.log('HABIT OWNER:', habit.user.toString());
-    console.log('REQUEST USER:', userId);
 
     if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
     }
 
     const today = new Date();
-
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     const exists = await this.checkinModel.findOne({
       habit: habit._id,
@@ -206,13 +196,31 @@ export class CheckinsService {
       return 0;
     }
 
-    const dates = checkins.map((c) => {
-      const d = new Date(c.date);
+    const dates = checkins
+      .map((checkin) => {
+        const date = new Date(checkin.date);
+        date.setHours(0, 0, 0, 0);
+        return date;
+      })
+      .sort((a, b) => a.getTime() - b.getTime());
 
-      d.setHours(0, 0, 0, 0);
+    const today = new Date();
 
-      return d;
-    });
+    today.setUTCHours(0, 0, 0, 0);
+
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const latestDate = dates[dates.length - 1];
+
+    // If the latest check-in isn't today or yesterday,
+    // the current streak is already broken.
+    if (
+      latestDate.getTime() !== today.getTime() &&
+      latestDate.getTime() !== yesterday.getTime()
+    ) {
+      return 0;
+    }
 
     let streak = 1;
 

@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { HabitModule } from './habits/habits.module';
 import { CheckinModule } from './checkins/checkin.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
     HabitModule,
     CheckinModule,
     DashboardModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

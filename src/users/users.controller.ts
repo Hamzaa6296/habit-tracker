@@ -1,42 +1,54 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   Body,
   Controller,
   Delete,
   Get,
-  Param,
   Patch,
-  Post,
+  UseGuards,
 } from '@nestjs/common';
+
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
+
 import { UpdateUserDto } from './dto/update-user.dto';
 
+import { ChangePasswordDto } from './dto/change-password.dto';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post()
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
+  @Get('me')
+  getMe(@CurrentUser() user: any) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-call
+    return this.usersService.findOne(user._id.toString());
   }
 
-  @Get()
-  fingAll() {
-    return this.usersService.findAll();
+  @Patch('me')
+  updateMe(@CurrentUser() user: any, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.updateUser(user._id.toString(), updateUserDto);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  @Patch('me/password')
+  changePassword(
+    @CurrentUser() user: any,
+    @Body() changePasswordDto: ChangePasswordDto,
+  ) {
+    return this.usersService.changePassword(
+      user._id.toString(),
+      changePasswordDto,
+    );
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.UpdateUser(id, updateUserDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.usersService.removeUser(id);
+  @Delete('me')
+  deleteMe(@CurrentUser() user: any) {
+    return this.usersService.removeUser(user._id.toString());
   }
 }
