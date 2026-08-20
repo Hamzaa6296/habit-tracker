@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import {
   Body,
   Param,
@@ -11,9 +12,11 @@ import {
   Delete,
   Controller,
 } from '@nestjs/common';
+
 import { HabitsService } from './habits.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
 import { createHabitDto } from './dto/create-habit.dto';
 import { UpdateHabitDto } from './dto/update-habit.dto';
 
@@ -24,20 +27,12 @@ export class HabitsController {
 
   @Post()
   create(@CurrentUser() user, @Body() dto: createHabitDto) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access
     return this.habitsService.create(user._id.toString(), dto);
   }
 
   @Get()
   findAll(@CurrentUser() user) {
-    console.log('🔥🔥🔥 CONTROLLER REACHED');
-    console.log('USER:', user);
-
-    return {
-      message: 'Controller is working',
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      userId: user._id.toString(),
-    };
+    return this.habitsService.findAll(user._id.toString());
   }
 
   @Get(':id')

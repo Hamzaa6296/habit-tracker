@@ -19,10 +19,11 @@ export class HabitsService {
     });
   }
 
-  findAll(userId: string) {
-    return this.habitModel.find({
-      user: userId,
+  async findAll(userId: string) {
+    const habits = await this.habitModel.find({
+      user: new Types.ObjectId(userId),
     });
+    return habits;
   }
 
   async findOne(userId: string, habitId: string) {

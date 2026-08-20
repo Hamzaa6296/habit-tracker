@@ -23,11 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   // eslint-disable-next-line @typescript-eslint/require-await
   async validate(payload: any) {
-    console.log('🔥 JWT STRATEGY HIT');
-    console.log('PAYLOAD:', payload);
     const user = await this.usersService.findOne(payload.sub);
-    console.log('USER:', user);
-
     if (!user) {
       throw new UnauthorizedException();
     }

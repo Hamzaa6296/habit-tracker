@@ -1,16 +1,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
+
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
 import { InjectModel } from '@nestjs/mongoose';
-
-import { Model } from 'mongoose';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { Model, Types } from 'mongoose';
 
 import { Checkin, CheckinDocument } from './schemas/checkin.schema';
-
 import { Habit, HabitDocument } from '../habits/schemas/habit.schema';
 
 @Injectable()
@@ -23,13 +22,27 @@ export class CheckinsService {
     private readonly habitModel: Model<HabitDocument>,
   ) {}
 
+  // =========================================================
+  // CREATE CHECK-IN
+  // =========================================================
+
   async create(userId: string, habitId: string) {
-    const habit = await this.habitModel.findOne({
-      _id: habitId,
-      user: userId,
-    });
+    console.log('========== CREATE CHECK-IN DEBUG ==========');
+    console.log('USER ID:', userId);
+    console.log('HABIT ID:', habitId);
+
+    const habit = await this.habitModel.findById(habitId);
+
+    console.log('HABIT:', habit);
 
     if (!habit) {
+      throw new NotFoundException('Habit not found');
+    }
+
+    console.log('HABIT OWNER:', habit.user.toString());
+    console.log('REQUEST USER:', userId);
+
+    if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
     }
 
@@ -58,32 +71,66 @@ export class CheckinsService {
     return checkin;
   }
 
+  // =========================================================
+  // GET ALL CHECK-INS
+  // =========================================================
+
   async findAll(userId: string, habitId: string) {
-    const habit = await this.habitModel.findOne({
-      _id: habitId,
-      user: userId,
-    });
+    console.log('========== FIND CHECKINS DEBUG ==========');
+    console.log('USER ID:', userId);
+    console.log('HABIT ID:', habitId);
+
+    const habit = await this.habitModel.findById(habitId);
+
+    console.log('HABIT FOUND BY ID:', habit);
 
     if (!habit) {
       throw new NotFoundException('Habit not found');
     }
 
-    return this.checkinModel
+    console.log('HABIT OWNER:', habit.user.toString());
+    console.log('REQUEST USER:', userId);
+
+    if (habit.user.toString() !== userId) {
+      throw new NotFoundException('Habit not found');
+    }
+
+    const checkins = await this.checkinModel
       .find({
         habit: habit._id,
+        user: habit.user,
       })
       .sort({
         date: -1,
       });
+
+    console.log('CHECKINS FOUND:', checkins);
+
+    return checkins;
   }
+  // =========================================================
+  // DELETE CHECK-IN
+  // =========================================================
 
   async remove(userId: string, habitId: string, checkInId: string) {
-    const habit = await this.habitModel.findOne({
-      _id: habitId,
-      user: userId,
-    });
+    console.log('========== DELETE CHECK-IN DEBUG ==========');
+    console.log('USER ID:', userId);
+    console.log('HABIT ID:', habitId);
+    console.log('CHECK-IN ID:', checkInId);
+
+    const habit = await this.habitModel.findById(habitId);
+
+    console.log('HABIT:', habit);
 
     if (!habit) {
+      throw new NotFoundException('Habit not found');
+    }
+
+    console.log('HABIT OWNER:', habit.user.toString());
+
+    console.log('REQUEST USER:', userId);
+
+    if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
     }
 
@@ -92,6 +139,8 @@ export class CheckinsService {
       habit: habit._id,
       user: habit.user,
     });
+
+    console.log('DELETED CHECK-IN:', deleted);
 
     if (!deleted) {
       throw new NotFoundException('Check-in not found');
@@ -104,7 +153,9 @@ export class CheckinsService {
     };
   }
 
-  // --------------------------------------------------
+  // =========================================================
+  // UPDATE HABIT STATISTICS
+  // =========================================================
 
   private async updateHabitStatistics(habitId: string): Promise<void> {
     const habit = await this.habitModel.findById(habitId);
@@ -146,7 +197,9 @@ export class CheckinsService {
     await habit.save();
   }
 
-  // --------------------------------------------------
+  // =========================================================
+  // CURRENT STREAK
+  // =========================================================
 
   private calculateCurrentStreak(checkins: CheckinDocument[]): number {
     if (!checkins.length) {
@@ -155,7 +208,9 @@ export class CheckinsService {
 
     const dates = checkins.map((c) => {
       const d = new Date(c.date);
+
       d.setHours(0, 0, 0, 0);
+
       return d;
     });
 
@@ -163,7 +218,6 @@ export class CheckinsService {
 
     for (let i = dates.length - 1; i > 0; i--) {
       const current = dates[i];
-
       const previous = dates[i - 1];
 
       const diff =
@@ -179,7 +233,9 @@ export class CheckinsService {
     return streak;
   }
 
-  // --------------------------------------------------
+  // =========================================================
+  // LONGEST STREAK
+  // =========================================================
 
   private calculateLongestStreak(checkins: CheckinDocument[]): number {
     if (!checkins.length) {
@@ -188,12 +244,13 @@ export class CheckinsService {
 
     const dates = checkins.map((c) => {
       const d = new Date(c.date);
+
       d.setHours(0, 0, 0, 0);
+
       return d;
     });
 
     let current = 1;
-
     let longest = 1;
 
     for (let i = 1; i < dates.length; i++) {
@@ -214,7 +271,9 @@ export class CheckinsService {
     return longest;
   }
 
-  // --------------------------------------------------
+  // =========================================================
+  // COMPLETION RATE
+  // =========================================================
 
   private calculateCompletionRate(
     createdAt: Date,
