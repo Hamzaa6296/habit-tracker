@@ -5,12 +5,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
 import { InjectModel } from '@nestjs/mongoose';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { Model, Types } from 'mongoose';
+
+import { Model } from 'mongoose';
 
 import { Checkin, CheckinDocument } from './schemas/checkin.schema';
-import { Habit, HabitDocument } from '../habits/schemas/habit.schema';
+
+import {
+  Habit,
+  HabitDocument,
+  HabitFrequency,
+} from '../habits/schemas/habit.schema';
 
 @Injectable()
 export class CheckinsService {
@@ -33,13 +39,14 @@ export class CheckinsService {
       throw new NotFoundException('Habit not found');
     }
 
+    // Make sure the habit belongs to the authenticated user
     if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
     }
 
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const today = this.normalizeDate(new Date());
 
+    // Prevent duplicate check-in for the same habit/day
     const exists = await this.checkinModel.findOne({
       habit: habit._id,
       user: habit.user,
@@ -56,6 +63,7 @@ export class CheckinsService {
       date: today,
     });
 
+    // Recalculate all cached statistics
     await this.updateHabitStatistics(habitId);
 
     return checkin;
@@ -66,26 +74,17 @@ export class CheckinsService {
   // =========================================================
 
   async findAll(userId: string, habitId: string) {
-    console.log('========== FIND CHECKINS DEBUG ==========');
-    console.log('USER ID:', userId);
-    console.log('HABIT ID:', habitId);
-
     const habit = await this.habitModel.findById(habitId);
-
-    console.log('HABIT FOUND BY ID:', habit);
 
     if (!habit) {
       throw new NotFoundException('Habit not found');
     }
 
-    console.log('HABIT OWNER:', habit.user.toString());
-    console.log('REQUEST USER:', userId);
-
     if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
     }
 
-    const checkins = await this.checkinModel
+    return this.checkinModel
       .find({
         habit: habit._id,
         user: habit.user,
@@ -93,32 +92,18 @@ export class CheckinsService {
       .sort({
         date: -1,
       });
-
-    console.log('CHECKINS FOUND:', checkins);
-
-    return checkins;
   }
+
   // =========================================================
   // DELETE CHECK-IN
   // =========================================================
 
   async remove(userId: string, habitId: string, checkInId: string) {
-    console.log('========== DELETE CHECK-IN DEBUG ==========');
-    console.log('USER ID:', userId);
-    console.log('HABIT ID:', habitId);
-    console.log('CHECK-IN ID:', checkInId);
-
     const habit = await this.habitModel.findById(habitId);
-
-    console.log('HABIT:', habit);
 
     if (!habit) {
       throw new NotFoundException('Habit not found');
     }
-
-    console.log('HABIT OWNER:', habit.user.toString());
-
-    console.log('REQUEST USER:', userId);
 
     if (habit.user.toString() !== userId) {
       throw new NotFoundException('Habit not found');
@@ -130,12 +115,11 @@ export class CheckinsService {
       user: habit.user,
     });
 
-    console.log('DELETED CHECK-IN:', deleted);
-
     if (!deleted) {
       throw new NotFoundException('Check-in not found');
     }
 
+    // Recalculate statistics after deletion
     await this.updateHabitStatistics(habitId);
 
     return {
@@ -157,6 +141,7 @@ export class CheckinsService {
     const checkins = await this.checkinModel
       .find({
         habit: habit._id,
+        user: habit.user,
       })
       .sort({
         date: 1,
@@ -167,13 +152,14 @@ export class CheckinsService {
     const lastCompletedAt =
       totalCheckIns > 0 ? checkins[totalCheckIns - 1].date.getTime() : 0;
 
-    const currentStreak = this.calculateCurrentStreak(checkins);
+    const currentStreak = this.calculateCurrentStreak(habit, checkins);
 
-    const longestStreak = this.calculateLongestStreak(checkins);
+    const longestStreak = this.calculateLongestStreak(habit, checkins);
 
     const createdAt = habit.get('createdAt') as Date;
 
     const completionRate = this.calculateCompletionRate(
+      habit,
       createdAt,
       totalCheckIns,
     );
@@ -191,36 +177,20 @@ export class CheckinsService {
   // CURRENT STREAK
   // =========================================================
 
-  private calculateCurrentStreak(checkins: CheckinDocument[]): number {
+  private calculateCurrentStreak(
+    habit: HabitDocument,
+    checkins: CheckinDocument[],
+  ): number {
     if (!checkins.length) {
       return 0;
     }
 
-    const dates = checkins
-      .map((checkin) => {
-        const date = new Date(checkin.date);
-        date.setHours(0, 0, 0, 0);
-        return date;
-      })
-      .sort((a, b) => a.getTime() - b.getTime());
+    const dates = this.getUniqueSortedDates(checkins);
 
-    const today = new Date();
-
-    today.setUTCHours(0, 0, 0, 0);
-
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const latestDate = dates[dates.length - 1];
-
-    // If the latest check-in isn't today or yesterday,
-    // the current streak is already broken.
-    if (
-      latestDate.getTime() !== today.getTime() &&
-      latestDate.getTime() !== yesterday.getTime()
-    ) {
-      return 0;
-    }
+    /*
+     * Current streak starts from the most recent
+     * completed scheduled day.
+     */
 
     let streak = 1;
 
@@ -228,14 +198,52 @@ export class CheckinsService {
       const current = dates[i];
       const previous = dates[i - 1];
 
-      const diff =
-        (current.getTime() - previous.getTime()) / (1000 * 60 * 60 * 24);
+      const expectedPrevious = this.getPreviousScheduledDate(habit, current);
 
-      if (diff === 1) {
+      if (!expectedPrevious) {
+        break;
+      }
+
+      if (this.isSameDay(previous, expectedPrevious)) {
         streak++;
       } else {
         break;
       }
+    }
+
+    /*
+     * If the most recent check-in is not the latest
+     * scheduled occurrence, the streak is no longer active.
+     *
+     * Example daily habit:
+     *
+     * Wednesday ✓
+     * Thursday ✗
+     * Friday ✓
+     *
+     * Friday streak = 1.
+     *
+     * Example Monday/Wednesday/Friday habit:
+     *
+     * Monday ✓
+     * Wednesday ✓
+     * Friday ✓
+     *
+     * Friday streak = 3.
+     */
+
+    const latestCheckin = dates[dates.length - 1];
+
+    const latestExpectedDate = this.getLatestScheduledDateOnOrBefore(
+      habit,
+      new Date(),
+    );
+
+    if (
+      latestExpectedDate &&
+      !this.isSameDay(latestCheckin, latestExpectedDate)
+    ) {
+      return 0;
     }
 
     return streak;
@@ -245,27 +253,29 @@ export class CheckinsService {
   // LONGEST STREAK
   // =========================================================
 
-  private calculateLongestStreak(checkins: CheckinDocument[]): number {
+  private calculateLongestStreak(
+    habit: HabitDocument,
+    checkins: CheckinDocument[],
+  ): number {
     if (!checkins.length) {
       return 0;
     }
 
-    const dates = checkins.map((c) => {
-      const d = new Date(c.date);
-
-      d.setHours(0, 0, 0, 0);
-
-      return d;
-    });
+    const dates = this.getUniqueSortedDates(checkins);
 
     let current = 1;
     let longest = 1;
 
     for (let i = 1; i < dates.length; i++) {
-      const diff =
-        (dates[i].getTime() - dates[i - 1].getTime()) / (1000 * 60 * 60 * 24);
+      const currentDate = dates[i];
+      const previousDate = dates[i - 1];
 
-      if (diff === 1) {
+      const expectedPrevious = this.getPreviousScheduledDate(
+        habit,
+        currentDate,
+      );
+
+      if (expectedPrevious && this.isSameDay(previousDate, expectedPrevious)) {
         current++;
 
         if (current > longest) {
@@ -280,24 +290,236 @@ export class CheckinsService {
   }
 
   // =========================================================
+  // PREVIOUS SCHEDULED DATE
+  // =========================================================
+
+  private getPreviousScheduledDate(
+    habit: HabitDocument,
+    currentDate: Date,
+  ): Date | null {
+    /*
+     * DAILY
+     *
+     * Previous occurrence is simply yesterday.
+     */
+
+    if (habit.frequency === HabitFrequency.DAILY) {
+      const previous = new Date(currentDate);
+
+      previous.setUTCDate(previous.getUTCDate() - 1);
+
+      return this.normalizeDate(previous);
+    }
+
+    /*
+     * WEEKLY / CUSTOM
+     *
+     * We use weekDays.
+     *
+     * Convention:
+     *
+     * 1 = Monday
+     * 2 = Tuesday
+     * 3 = Wednesday
+     * 4 = Thursday
+     * 5 = Friday
+     * 6 = Saturday
+     * 7 = Sunday
+     */
+
+    const weekDays = this.getScheduledWeekDays(habit);
+
+    if (!weekDays.length) {
+      return null;
+    }
+
+    const current = this.normalizeDate(currentDate);
+
+    /*
+     * Search backwards up to 7 days for the
+     * previous scheduled occurrence.
+     */
+
+    for (let i = 1; i <= 7; i++) {
+      const candidate = new Date(current);
+
+      candidate.setUTCDate(candidate.getUTCDate() - i);
+
+      const weekday = this.getWeekDayNumber(candidate);
+
+      if (weekDays.includes(weekday)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  // =========================================================
+  // LATEST SCHEDULED DATE
+  // =========================================================
+
+  private getLatestScheduledDateOnOrBefore(
+    habit: HabitDocument,
+    date: Date,
+  ): Date | null {
+    const current = this.normalizeDate(date);
+
+    if (habit.frequency === HabitFrequency.DAILY) {
+      return current;
+    }
+
+    const weekDays = this.getScheduledWeekDays(habit);
+
+    if (!weekDays.length) {
+      return null;
+    }
+
+    for (let i = 0; i <= 7; i++) {
+      const candidate = new Date(current);
+
+      candidate.setUTCDate(candidate.getUTCDate() - i);
+
+      const weekday = this.getWeekDayNumber(candidate);
+
+      if (weekDays.includes(weekday)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  // =========================================================
+  // GET SCHEDULED WEEKDAYS
+  // =========================================================
+
+  private getScheduledWeekDays(habit: HabitDocument): number[] {
+    if (!habit.weekDays || !habit.weekDays.length) {
+      return [];
+    }
+
+    return [...habit.weekDays].sort((a, b) => a - b);
+  }
+
+  // =========================================================
+  // WEEKDAY NUMBER
+  // =========================================================
+
+  private getWeekDayNumber(date: Date): number {
+    const day = date.getUTCDay();
+
+    /*
+     * JavaScript:
+     *
+     * Sunday = 0
+     * Monday = 1
+     * ...
+     * Saturday = 6
+     *
+     * Our application:
+     *
+     * Monday = 1
+     * ...
+     * Sunday = 7
+     */
+
+    return day === 0 ? 7 : day;
+  }
+
+  // =========================================================
+  // UNIQUE + SORTED DATES
+  // =========================================================
+
+  private getUniqueSortedDates(checkins: CheckinDocument[]): Date[] {
+    const timestamps = new Set<number>();
+
+    checkins.forEach((checkin) => {
+      const date = this.normalizeDate(checkin.date);
+
+      timestamps.add(date.getTime());
+    });
+
+    return Array.from(timestamps)
+      .sort((a, b) => a - b)
+      .map((timestamp) => new Date(timestamp));
+  }
+
+  // =========================================================
+  // NORMALIZE DATE
+  // =========================================================
+
+  private normalizeDate(date: Date): Date {
+    const normalized = new Date(date);
+
+    normalized.setUTCHours(0, 0, 0, 0);
+
+    return normalized;
+  }
+
+  // =========================================================
+  // SAME DAY
+  // =========================================================
+
+  private isSameDay(first: Date, second: Date): boolean {
+    return first.getTime() === second.getTime();
+  }
+
+  // =========================================================
   // COMPLETION RATE
   // =========================================================
 
   private calculateCompletionRate(
+    habit: HabitDocument,
     createdAt: Date,
     totalCheckIns: number,
   ): number {
-    const today = new Date();
+    const today = this.normalizeDate(new Date());
+    const created = this.normalizeDate(createdAt);
 
-    const days =
-      Math.floor(
-        (today.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24),
-      ) + 1;
-
-    if (days <= 0) {
+    if (created > today) {
       return 0;
     }
 
-    return Number(((totalCheckIns / days) * 100).toFixed(2));
+    /*
+     * Calculate how many scheduled occurrences
+     * were possible since the habit was created.
+     */
+
+    let possibleCheckIns = 0;
+
+    const current = new Date(created);
+
+    while (current <= today) {
+      if (this.isScheduledDate(habit, current)) {
+        possibleCheckIns++;
+      }
+
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    if (possibleCheckIns === 0) {
+      return 0;
+    }
+
+    return Number(((totalCheckIns / possibleCheckIns) * 100).toFixed(2));
+  }
+
+  // =========================================================
+  // IS SCHEDULED DATE
+  // =========================================================
+
+  private isScheduledDate(habit: HabitDocument, date: Date): boolean {
+    if (habit.frequency === HabitFrequency.DAILY) {
+      return true;
+    }
+
+    const weekDays = this.getScheduledWeekDays(habit);
+
+    if (!weekDays.length) {
+      return false;
+    }
+
+    return weekDays.includes(this.getWeekDayNumber(date));
   }
 }

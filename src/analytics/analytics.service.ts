@@ -1,13 +1,8 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 
 import { Habit, HabitDocument } from '../habits/schemas/habit.schema';
-
 import { Checkin, CheckinDocument } from '../checkins/schemas/checkin.schema';
 
 @Injectable()
@@ -32,10 +27,15 @@ export class AnalyticsService {
     return this.getAnalytics(userId, 365);
   }
 
-  private async getAnalytics(userId: string, days: number) {
+  // =========================================================
+  // HEATMAP
+  // =========================================================
+
+  async getHeatmap(userId: string, days = 126) {
+    const userObjectId = new Types.ObjectId(userId);
+
     const today = new Date();
 
-    // Normalize today to UTC midnight
     const end = new Date(today);
     end.setUTCHours(23, 59, 59, 999);
 
@@ -44,7 +44,71 @@ export class AnalyticsService {
     start.setUTCHours(0, 0, 0, 0);
 
     const checkins = await this.checkinModel.find({
-      user: userId,
+      user: userObjectId,
+      date: {
+        $gte: start,
+        $lte: end,
+      },
+    });
+
+    /*
+     * Create every date first.
+     *
+     * This means days with no check-ins will still
+     * appear in the heatmap with count = 0.
+     */
+
+    const dailyActivity: Record<string, number> = {};
+
+    for (let i = 0; i < days; i++) {
+      const date = new Date(start);
+
+      date.setUTCDate(start.getUTCDate() + i);
+
+      const key = date.toISOString().split('T')[0];
+
+      dailyActivity[key] = 0;
+    }
+
+    /*
+     * Count check-ins for each day.
+     */
+
+    checkins.forEach((checkin) => {
+      const key = checkin.date.toISOString().split('T')[0];
+
+      if (dailyActivity[key] !== undefined) {
+        dailyActivity[key]++;
+      }
+    });
+
+    return {
+      period: days,
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      totalCheckIns: checkins.length,
+      dailyActivity,
+    };
+  }
+
+  // =========================================================
+  // WEEKLY / MONTHLY / YEARLY ANALYTICS
+  // =========================================================
+
+  private async getAnalytics(userId: string, days: number) {
+    const userObjectId = new Types.ObjectId(userId);
+
+    const today = new Date();
+
+    const end = new Date(today);
+    end.setUTCHours(23, 59, 59, 999);
+
+    const start = new Date(today);
+    start.setUTCDate(start.getUTCDate() - (days - 1));
+    start.setUTCHours(0, 0, 0, 0);
+
+    const checkins = await this.checkinModel.find({
+      user: userObjectId,
       date: {
         $gte: start,
         $lte: end,
@@ -52,16 +116,10 @@ export class AnalyticsService {
     });
 
     const habits = await this.habitModel.find({
-      user: userId,
+      user: userObjectId,
       isActive: true,
     });
 
-    /*
-     * Create every date in the requested period.
-     *
-     * This is important because otherwise dates without
-     * check-ins simply don't exist in dailyDate.
-     */
     const dailyDate: Record<string, number> = {};
 
     for (let i = 0; i < days; i++) {
@@ -74,9 +132,6 @@ export class AnalyticsService {
       dailyDate[key] = 0;
     }
 
-    /*
-     * Count check-ins for each day.
-     */
     checkins.forEach((checkin) => {
       const key = checkin.date.toISOString().split('T')[0];
 
@@ -85,19 +140,12 @@ export class AnalyticsService {
       }
     });
 
-    /*
-     * Calculate completion rate for this period.
-     *
-     * For now we treat active habits as daily habits.
-     * We can make this frequency-aware later for:
-     * daily / weekly / custom habits.
-     */
-    const totalPossibleCheckins = habits.length * days;
+    const totalPossibleCheckIns = habits.length * days;
 
     const completionRate =
-      totalPossibleCheckins === 0
+      totalPossibleCheckIns === 0
         ? 0
-        : Number(((checkins.length / totalPossibleCheckins) * 100).toFixed(2));
+        : Number(((checkins.length / totalPossibleCheckIns) * 100).toFixed(2));
 
     return {
       period: days,
