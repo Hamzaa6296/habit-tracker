@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  ConflictException,
 } from '@nestjs/common';
 
 import { InjectModel } from '@nestjs/mongoose';
@@ -139,5 +140,63 @@ export class UsersService {
     return {
       message: 'Account deleted successfully',
     };
+  }
+
+  async updateProfile(
+    userId: string,
+    data: {
+      name?: string;
+      email?: string;
+    },
+  ) {
+    if (data.email) {
+      const existingUser = await this.userModel.findOne({
+        email: data.email,
+        _id: { $ne: userId },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('Email already exists');
+      }
+    }
+
+    const user = await this.userModel.findByIdAndUpdate(
+      userId,
+      {
+        $set: data,
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  async findById(userId: string, includePassword = false) {
+    const query = this.userModel.findById(userId);
+
+    if (includePassword) {
+      query.select('+password');
+    }
+
+    return query;
+  }
+
+  async updatePassword(userId: string, hashedPassword: string) {
+    return this.userModel.findByIdAndUpdate(
+      userId,
+      {
+        password: hashedPassword,
+      },
+      {
+        new: true,
+      },
+    );
   }
 }
