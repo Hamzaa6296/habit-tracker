@@ -6,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.enableCors({
-    origin: 'https://habit-tracker-frontend-gamma-seven.vercel.app/register',
+    origin: 'https://habit-tracker-frontend-gamma-seven.vercel.app',
     credentials: true,
   });
 
